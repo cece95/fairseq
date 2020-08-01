@@ -55,16 +55,13 @@ def load_sys(paths):
         with open(path) as f:
             for line in f:
                 line = line.rstrip()
-                # S: source
-                # T: target
-                # D: detokenized system output
-                if line.startswith(('S-', 'T-', 'D-')):
+                if line.startswith(('S-', 'T-', 'H-')):
                     i = int(line[line.find('-')+1:line.find('\t')])
                     if line.startswith('S-'):
                         src[i] = line.split('\t')[1]
                     if line.startswith('T-'):
                         tgt[i] = line.split('\t')[1]
-                    if line.startswith('D-'):
+                    if line.startswith('H-'):
                         if i not in hypos:
                             hypos[i] = []
                             log_probs[i] = []
@@ -118,7 +115,7 @@ def sentence_bleu(hypothesis, reference):
     bleu = compute_bleu(
         bleu.counts, bleu.totals,
         bleu.sys_len, bleu.ref_len,
-        smooth_method='exp',
+        smooth='exp', smooth_floor=0.0,
     )
     return bleu.score
 

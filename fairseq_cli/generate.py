@@ -32,17 +32,10 @@ def main(args):
     if args.results_path is not None:
         os.makedirs(args.results_path, exist_ok=True)
         output_path = os.path.join(args.results_path, 'generate-{}.txt'.format(args.gen_subset))
-        with open(output_path, 'w', buffering=1, encoding='utf-8') as h:
+        with open(output_path, 'w', buffering=1) as h:
             return _main(args, h)
     else:
         return _main(args, sys.stdout)
-
-
-def get_symbols_to_strip_from_output(generator):
-    if hasattr(generator, 'symbols_to_strip_from_output'):
-        return generator.symbols_to_strip_from_output
-    else:
-        return {generator.eos}
 
 
 def _main(args, output_file):
@@ -63,7 +56,7 @@ def _main(args, output_file):
     # Fix seed for stochastic decoding
     if args.seed is not None and not args.no_seed_provided:
         np.random.seed(args.seed)
-        utils.set_torch_seed(args.seed)
+        torch.manual_seed(args.seed)
 
     use_cuda = torch.cuda.is_available() and not args.cpu
 
@@ -181,7 +174,9 @@ def _main(args, output_file):
                         target_tokens,
                         args.remove_bpe,
                         escape_unk=True,
-                        extra_symbols_to_ignore=get_symbols_to_strip_from_output(generator),
+                        extra_symbols_to_ignore={
+                            generator.eos,
+                        }
                     )
 
             src_str = decode_fn(src_str)
@@ -203,7 +198,9 @@ def _main(args, output_file):
                     align_dict=align_dict,
                     tgt_dict=tgt_dict,
                     remove_bpe=args.remove_bpe,
-                    extra_symbols_to_ignore=get_symbols_to_strip_from_output(generator),
+                    extra_symbols_to_ignore={
+                        generator.eos,
+                    }
                 )
                 detok_hypo_str = decode_fn(hypo_str)
                 if not args.quiet:

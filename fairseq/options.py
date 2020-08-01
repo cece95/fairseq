@@ -32,7 +32,7 @@ def get_training_parser(default_task="translation"):
 def get_generation_parser(interactive=False, default_task="translation"):
     parser = get_parser("Generation", default_task)
     add_dataset_args(parser, gen=True)
-    add_distributed_training_args(parser, default_world_size=1)
+    add_distributed_training_args(parser)
     add_generation_args(parser)
     if interactive:
         add_interactive_args(parser)
@@ -60,10 +60,6 @@ def get_validation_parser(default_task=None):
     return parser
 
 
-def csv_str_list(x):
-    return x.split(',')
-
-
 def eval_str_list(x, type=float):
     if x is None:
         return None
@@ -73,14 +69,6 @@ def eval_str_list(x, type=float):
         return list(map(type, x))
     except TypeError:
         return [type(x)]
-
-
-def eval_str_dict(x, type=dict):
-    if x is None:
-        return None
-    if isinstance(x, str):
-        x = eval(x)
-    return x
 
 
 def eval_bool(x, default=False):
@@ -455,8 +443,6 @@ def add_optimization_args(parser):
                        help='force stop training at specified epoch')
     group.add_argument('--max-update', '--mu', default=0, type=int, metavar='N',
                        help='force stop training at specified update')
-    group.add_argument('--stop-time-hours', default=0, type=float, metavar='N',
-                       help='force stop training after specified cumulative time (if >0)')
     group.add_argument('--clip-norm', default=0.0, type=float, metavar='NORM',
                        help='clip threshold of gradients')
     group.add_argument('--sentence-avg', action='store_true',

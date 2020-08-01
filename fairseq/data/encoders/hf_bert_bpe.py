@@ -21,10 +21,12 @@ class BertBPE(object):
 
     def __init__(self, args):
         try:
-            from transformers import BertTokenizer
+            from pytorch_transformers import BertTokenizer
+            from pytorch_transformers.tokenization_utils import clean_up_tokenization
         except ImportError:
             raise ImportError(
-                'Please install transformers with: pip install transformers'
+                'Please install 1.0.0 version of pytorch_transformers'
+                'with: pip install pytorch-transformers'
             )
 
         if 'bpe_vocab_file' in args:
@@ -35,12 +37,13 @@ class BertBPE(object):
         else:
             vocab_file_name = 'bert-base-cased' if args.bpe_cased else 'bert-base-uncased'
             self.bert_tokenizer = BertTokenizer.from_pretrained(vocab_file_name)
+            self.clean_up_tokenization = clean_up_tokenization
 
     def encode(self, x: str) -> str:
         return ' '.join(self.bert_tokenizer.tokenize(x))
 
     def decode(self, x: str) -> str:
-        return self.bert_tokenizer.clean_up_tokenization(
+        return self.clean_up_tokenization(
             self.bert_tokenizer.convert_tokens_to_string(x.split(' '))
         )
 

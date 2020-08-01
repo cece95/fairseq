@@ -11,7 +11,6 @@ import contextlib
 from itertools import chain
 import logging
 import sys
-import time
 from typing import Any, Dict, List
 
 import torch
@@ -110,10 +109,6 @@ class Trainer(object):
             self.cuda_env_arr = None
 
         metrics.log_start_time("wall", priority=790, round=0)
-
-        self._start_time = time.time()
-        self._previous_training_time = 0
-        self._cumulative_training_time = None
 
     def reinitialize(self):
         """Reinitialize the Trainer, typically after model params change."""
@@ -223,7 +218,6 @@ class Trainer(object):
         """Save all training state in a checkpoint file."""
         if self.is_data_parallel_master:  # only save one checkpoint
             extra_state["metrics"] = metrics.state_dict()
-            extra_state["previous_training_time"] = self.cumulative_training_time()
             checkpoint_utils.save_state(
                 filename,
                 self.args,
@@ -296,10 +290,6 @@ class Trainer(object):
                     filename, epoch, self.get_num_updates()
                 )
             )
-
-            if "previous_training_time" in extra_state:
-                self._previous_training_time = extra_state["previous_training_time"]
-                self._start_time = time.time()
 
             self.lr_step(epoch)
 
@@ -478,11 +468,9 @@ class Trainer(object):
 
         # gather logging outputs from all replicas
         if self._sync_stats():
-            train_time = self._local_cumulative_training_time()
-            logging_outputs, (sample_size, ooms, total_train_time) = self._aggregate_logging_outputs(
-                logging_outputs, sample_size, ooms, train_time, ignore=is_dummy_batch,
+            logging_outputs, (sample_size, ooms) = self._aggregate_logging_outputs(
+                logging_outputs, sample_size, ooms, ignore=is_dummy_batch,
             )
-            self._cumulative_training_time = total_train_time / self.data_parallel_world_size
 
         overflow = False
         try:
@@ -727,17 +715,6 @@ class Trainer(object):
 
     def clip_grad_norm(self, clip_norm):
         return self.optimizer.clip_grad_norm(clip_norm, aggregate_norm_fn=None)
-
-    def cumulative_training_time(self):
-        if self._cumulative_training_time is None:
-            # single GPU
-            return self._local_cumulative_training_time()
-        else:
-            return self._cumulative_training_time
-
-    def _local_cumulative_training_time(self):
-        """Aggregate training time in seconds."""
-        return time.time() - self._start_time + self._previous_training_time
 
     def _prepare_sample(self, sample):
         if sample == "DUMMY":

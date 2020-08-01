@@ -21,16 +21,14 @@ def collate(
     left_pad_source=True,
     left_pad_target=False,
     input_feeding=True,
-    pad_to_length=None,
 ):
     if len(samples) == 0:
         return {}
 
-    def merge(key, left_pad, move_eos_to_beginning=False, pad_to_length=None):
+    def merge(key, left_pad, move_eos_to_beginning=False):
         return data_utils.collate_tokens(
             [s[key] for s in samples],
             pad_idx, eos_idx, left_pad, move_eos_to_beginning,
-            pad_to_length=pad_to_length,
         )
 
     def check_alignment(alignment, src_len, tgt_len):
@@ -56,10 +54,7 @@ def collate(
         return 1. / align_weights.float()
 
     id = torch.LongTensor([s['id'] for s in samples])
-    src_tokens = merge(
-        'source', left_pad=left_pad_source,
-        pad_to_length=pad_to_length['source'] if pad_to_length is not None else None
-    )
+    src_tokens = merge('source', left_pad=left_pad_source)
     # sort by descending source length
     src_lengths = torch.LongTensor([
         s['source'].ne(pad_idx).long().sum() for s in samples
@@ -71,26 +66,20 @@ def collate(
     prev_output_tokens = None
     target = None
     if samples[0].get('target', None) is not None:
-        target = merge(
-            'target', left_pad=left_pad_target,
-            pad_to_length=pad_to_length['target'] if pad_to_length is not None else None,
-        )
+        target = merge('target', left_pad=left_pad_target)
         target = target.index_select(0, sort_order)
         tgt_lengths = torch.LongTensor([
             s['target'].ne(pad_idx).long().sum() for s in samples
         ]).index_select(0, sort_order)
         ntokens = tgt_lengths.sum().item()
 
-        if samples[0].get('prev_output_tokens', None) is not None:
-            prev_output_tokens = merge('prev_output_tokens', left_pad=left_pad_target)
-        elif input_feeding:
+        if input_feeding:
             # we create a shifted version of targets for feeding the
             # previous output token(s) into the next decoder step
             prev_output_tokens = merge(
                 'target',
                 left_pad=left_pad_target,
                 move_eos_to_beginning=True,
-                pad_to_length=pad_to_length['target'] if pad_to_length is not None else None,
             )
             prev_output_tokens = prev_output_tokens.index_select(0, sort_order)
     else:
@@ -166,12 +155,6 @@ class LanguagePairDataset(FairseqDataset):
             source/target sentence.
         num_buckets (int, optional): if set to a value greater than 0, then
             batches will be bucketed into the given number of batch shapes.
-        src_lang_id (int, optional): source language ID, if set, the collated batch
-            will contain a field 'src_lang_id' in 'net_input' which indicates the
-            source language of the samples.
-        tgt_lang_id (int, optional): target language ID, if set, the collated batch
-            will contain a field 'tgt_lang_id' which indicates the target language
-             of the samples.
     """
 
     def __init__(
@@ -183,8 +166,6 @@ class LanguagePairDataset(FairseqDataset):
         align_dataset=None,
         append_bos=False, eos=None,
         num_buckets=0,
-        src_lang_id=None,
-        tgt_lang_id=None,
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
@@ -209,8 +190,7 @@ class LanguagePairDataset(FairseqDataset):
             assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
         self.append_bos = append_bos
         self.eos = (eos if eos is not None else src_dict.eos())
-        self.src_lang_id = src_lang_id
-        self.tgt_lang_id = tgt_lang_id
+
         if num_buckets > 0:
             from fairseq.data import BucketPadLengthDataset
             self.src = BucketPadLengthDataset(
@@ -285,14 +265,11 @@ class LanguagePairDataset(FairseqDataset):
     def __len__(self):
         return len(self.src)
 
-    def collater(self, samples, pad_to_length=None):
+    def collater(self, samples):
         """Merge a list of samples to form a mini-batch.
 
         Args:
             samples (List[dict]): samples to collate
-            pad_to_length (dict, optional): a dictionary of
-                {'source': source_pad_to_length, 'target': target_pad_to_length}
-                to indicate the max length to pad to in source and target respectively.
 
         Returns:
             dict: a mini-batch with the following keys:
@@ -312,36 +289,19 @@ class LanguagePairDataset(FairseqDataset):
                     This key will not be present if *input_feeding* is
                     ``False``.  Padding will appear on the left if
                     *left_pad_target* is ``True``.
-                  - `src_lang_id` (LongTensor): a long Tensor which contains source
-                    language IDs of each sample in the batch
 
                 - `target` (LongTensor): a padded 2D Tensor of tokens in the
                   target sentence of shape `(bsz, tgt_len)`. Padding will appear
                   on the left if *left_pad_target* is ``True``.
-                - `tgt_lang_id` (LongTensor): a long Tensor which contains target language
-                   IDs of each sample in the batch
         """
-        res = collate(
+        return collate(
             samples,
             pad_idx=self.src_dict.pad(),
             eos_idx=self.eos,
             left_pad_source=self.left_pad_source,
             left_pad_target=self.left_pad_target,
             input_feeding=self.input_feeding,
-            pad_to_length=pad_to_length,
         )
-        if self.src_lang_id is not None or self.tgt_lang_id is not None:
-            src_tokens = res['net_input']['src_tokens']
-            bsz = src_tokens.size(0)
-            if self.src_lang_id is not None:
-                res['net_input']['src_lang_id'] = torch.LongTensor(
-                            [[self.src_lang_id]]
-                            ).expand(bsz, 1).to(src_tokens)
-            if self.tgt_lang_id is not None:
-                res['tgt_lang_id'] = torch.LongTensor(
-                            [[self.tgt_lang_id]]
-                            ).expand(bsz, 1).to(src_tokens)
-        return res
 
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to

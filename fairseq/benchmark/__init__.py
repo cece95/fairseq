@@ -8,5 +8,4 @@ from . import (  # noqa
     dummy_lm,
     dummy_masked_lm,
     dummy_model,
-    dummy_mt,
 )

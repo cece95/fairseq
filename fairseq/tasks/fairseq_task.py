@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import warnings
-import os
 
 import torch
 
@@ -78,9 +77,6 @@ class FairseqTask(object):
             args (argparse.Namespace): parsed command-line arguments
         """
         return cls(args, **kwargs)
-
-    def has_sharded_data(self, split):
-        return (os.pathsep in getattr(self.args, 'data', ''))
 
     def load_dataset(self, split, combine=False, **kwargs):
         """Load a given dataset split.
@@ -232,7 +228,7 @@ class FairseqTask(object):
 
         return criterions.build_criterion(args, self)
 
-    def build_generator(self, models, args, seq_gen_cls=None):
+    def build_generator(self, models, args):
         if getattr(args, "score_reference", False):
             from fairseq.sequence_scorer import SequenceScorer
 
@@ -296,11 +292,10 @@ class FairseqTask(object):
         else:
             search_strategy = search.BeamSearch(self.target_dictionary)
 
-        if seq_gen_cls is None:
-            if getattr(args, "print_alignment", False):
-                seq_gen_cls = SequenceGeneratorWithAlignment
-            else:
-                seq_gen_cls = SequenceGenerator
+        if getattr(args, "print_alignment", False):
+            seq_gen_cls = SequenceGeneratorWithAlignment
+        else:
+            seq_gen_cls = SequenceGenerator
 
         return seq_gen_cls(
             models,

@@ -33,11 +33,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-MANIFOLD_PATH_SEP = "|"
-
-
 def split_paths(paths: str) -> List[str]:
-    return paths.split(os.pathsep) if "://" not in paths else paths.split(MANIFOLD_PATH_SEP)
+    return paths.split(os.pathsep) if "://" not in paths else paths.split("|")
 
 
 def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
@@ -300,11 +297,10 @@ def clip_grad_norm_(params, max_norm, aggregate_norm_fn=None) -> torch.Tensor:
         if multi_tensor_l2norm_available:
             total_norm = multi_tensor_total_norm(grads)
         else:
-            if torch.cuda.is_available():
-                warnings.warn(
-                    "amp_C fused kernels unavailable, disabling multi_tensor_l2norm; "
-                    "you may get better performance by installing NVIDIA's apex library"
-                )
+            warnings.warn(
+                "amp_C fused kernels unavailable, disabling multi_tensor_l2norm; "
+                "you may get better performance by installing NVIDIA's apex library"
+            )
             total_norm = torch.norm(
                 torch.stack([torch.norm(g, p=2, dtype=torch.float32) for g in grads])
             )
@@ -560,6 +556,12 @@ def get_tpu_device(args):
     return xm.xla_device()
 
 
+def logging_multiple_line_messages(msg):
+    msg_arr = msg.split("\n")
+    for line in msg_arr:
+        logger.info(line)
+
+
 class CudaEnvironment(object):
     def __init__(self):
         cur_device = torch.cuda.current_device()
@@ -578,12 +580,13 @@ class CudaEnvironment(object):
         center = "CUDA enviroments for all {} workers".format(num_workers)
         banner_len = 40 - len(center) // 2
         first_line = "*" * banner_len + center + "*" * banner_len
-        logger.info(first_line)
+        msg_arr = [first_line]
         for r, env in enumerate(cuda_env_list):
-            logger.info(
+            msg_arr.append(
                 "rank {:3d}: ".format(r)
                 + "capabilities = {:2d}.{:<2d} ; ".format(env.major, env.minor)
                 + "total memory = {:.3f} GB ; ".format(env.total_memory_in_GB)
                 + "name = {:40s}".format(env.name)
             )
-        logger.info(first_line)
+        msg_arr.append(first_line)
+        logging_multiple_line_messages("\n".join(msg_arr))
