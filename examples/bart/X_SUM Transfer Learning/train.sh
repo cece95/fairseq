@@ -1,3 +1,4 @@
+#!/bin/sh
 TOTAL_NUM_UPDATES=15000  
 WARMUP_UPDATES=500      
 LR=3e-05
@@ -6,7 +7,7 @@ UPDATE_FREQ=1
 BART_PATH=model.pt
 
 CUDA_VISIBLE_DEVICES=-1 fairseq-train data-bin \
-    --cpu \
+    --log-format simple \
     --restore-file $BART_PATH \
     --max-tokens $MAX_TOKENS \
     --task translation \
@@ -22,7 +23,7 @@ CUDA_VISIBLE_DEVICES=-1 fairseq-train data-bin \
     --label-smoothing 0.1 \
     --dropout 0.1 --attention-dropout 0.1 \
     --weight-decay 0.01 --optimizer adam --adam-betas "(0.9, 0.999)" --adam-eps 1e-08 \
-    --clip-norm 0.1 \
+    --clip-norm 0.1 --cpu --num-workers=20 \
     --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
     --update-freq $UPDATE_FREQ \
     --skip-invalid-size-inputs-valid-test \
